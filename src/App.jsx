@@ -1,14 +1,29 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabaseClient'
+import Auth from './Auth'
 import './App.css'
 
 function App() {
   const [todos, setTodos] = useState([])
   const [inputValue, setInputValue] = useState('')
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    fetchTodos()
+    const { data: { subscription } } =
+      supabase.auth.onAuthStateChange((event, session) => {
+        setUser(session?.user ?? null)
+        setAuthLoading(false)
+
+        if (session?.user) {
+          fetchTodos()
+        } else {
+          setTodos([])
+        }
+      })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   async function fetchTodos() {
@@ -56,9 +71,33 @@ function App() {
     }
   }
 
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) console.error('Error signing out:', error.message)
+  }
+
+  if (authLoading) {
+    return <div className="app"><p>Loading...</p></div>
+  }
+
+  if (!user) {
+    return (
+      <div className="app">
+        <h1>React Todo App</h1>
+        <Auth />
+      </div>
+    )
+  }
+
   return (
     <div className="app">
-      <h1>React Todo App</h1>
+      <div className="header">
+        <h1>React Todo App</h1>
+        <div>
+          <span>{user.email}</span>
+          <button onClick={handleSignOut}>Sign Out</button>
+        </div>
+      </div>
 
       <form className="todo-form" onSubmit={handleSubmit}>
         <input
@@ -80,9 +119,7 @@ function App() {
               <button
                 className="delete-btn"
                 onClick={() => deleteTodo(todo.id)}
-              >
-                Delete
-              </button>
+              >Delete</button>
             </li>
           ))}
         </ul>
